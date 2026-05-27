@@ -74,6 +74,9 @@ class RLM:
         on_subcall_complete: Callable[[int, str, float, str | None], None] | None = None,
         on_iteration_start: Callable[[int, int], None] | None = None,
         on_iteration_complete: Callable[[int, int, float], None] | None = None,
+        sampling_args: dict[str, Any] | None = None,
+        sub_sampling_args: dict[str, Any] | None = None,
+        orchestrator: bool = True,
     ):
         """
         Args:
@@ -109,6 +112,32 @@ class RLM:
             on_iteration_start: Callback fired when an iteration starts. Args: (depth, iteration_num).
             on_iteration_complete: Callback fired when an iteration completes. Args: (depth, iteration_num, duration).
         """
+        # Sampling args plumbed into backend_kwargs / other_backend_kwargs
+        # before the clients are constructed, so they reach the chat-completions
+        # call (e.g. temperature, top_p, max_tokens, seed). ``sampling_args``
+        # applies to the root model (depth=0); ``sub_sampling_args`` to
+        # depth=1 sub-LLM calls. If ``sub_sampling_args`` is set without an
+        # ``other_backends``, we mirror the root backend so depth=1 routes
+        # through a separate client with its own sampling args.
+        if sampling_args is not None:
+            backend_kwargs = dict(backend_kwargs or {})
+            existing = dict(backend_kwargs.get("sampling_args") or {})
+            existing.update(sampling_args)
+            backend_kwargs["sampling_args"] = existing
+        if sub_sampling_args is not None:
+            if other_backends is None:
+                other_backends = [backend]
+                other_backend_kwargs = [dict(backend_kwargs or {})]
+            else:
+                other_backend_kwargs = [
+                    dict(kw or {}) for kw in (other_backend_kwargs or [{}])
+                ]
+            first = dict(other_backend_kwargs[0])
+            existing = dict(first.get("sampling_args") or {})
+            existing.update(sub_sampling_args)
+            first["sampling_args"] = existing
+            other_backend_kwargs[0] = first
+
         # Store config for spawning per-completion
         self.backend = backend
         self.backend_kwargs = backend_kwargs
@@ -144,6 +173,7 @@ class RLM:
         self.max_tokens = max_tokens
         self.max_errors = max_errors
         self.system_prompt = custom_system_prompt if custom_system_prompt else RLM_SYSTEM_PROMPT
+        self.orchestrator = orchestrator
         self.logger = logger
         self.verbose = VerbosePrinter(enabled=verbose)
 
@@ -276,6 +306,7 @@ class RLM:
             query_metadata=metadata,
             custom_tools=self.custom_tools,
             root_prompt=root_prompt,
+            orchestrator=self.orchestrator,
         )
         if self.compaction:
             message_history[0]["content"] += (

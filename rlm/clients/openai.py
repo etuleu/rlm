@@ -18,6 +18,19 @@ DEFAULT_PRIME_API_KEY = os.getenv("PRIME_API_KEY")
 DEFAULT_PRIME_INTELLECT_BASE_URL = "https://api.pinference.ai/api/v1/"
 
 
+def _normalize_sampling_args(sampling_args: dict[str, Any]) -> dict[str, Any]:
+    """Match the rename done by verifiers' OpenAIChatCompletionsClient so the
+    same sampling_args dict produces byte-equivalent chat.completions.create
+    calls in both harnesses. ``max_tokens`` is the legacy OpenAI param;
+    vLLM treats ``max_completion_tokens`` differently in its pre-reservation
+    check (legacy is reserved up-front against max_model_len; new is not).
+    """
+    args = dict(sampling_args or {})
+    if "max_tokens" in args:
+        args["max_completion_tokens"] = args.pop("max_tokens")
+    return {k: v for k, v in args.items() if v is not None}
+
+
 class OpenAIClient(BaseLM):
     """
     LM Client for running models with the OpenAI API. Works with vLLM as well.
@@ -32,9 +45,10 @@ class OpenAIClient(BaseLM):
         api_key: str | None = None,
         model_name: str | None = None,
         base_url: str | None = None,
+        sampling_args: dict[str, Any] | None = None,
         **kwargs,
     ):
-        super().__init__(model_name=model_name, **kwargs)
+        super().__init__(model_name=model_name, sampling_args=sampling_args, **kwargs)
 
         if api_key is None:
             if base_url == "https://api.openai.com/v1" or base_url is None:
@@ -83,7 +97,8 @@ class OpenAIClient(BaseLM):
             extra_body["usage"] = {"include": True}
 
         response = self.client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model, messages=messages, extra_body=extra_body,
+            **_normalize_sampling_args(self.sampling_args),
         )
         self._track_cost(response, model)
         return response.choices[0].message.content
@@ -107,7 +122,8 @@ class OpenAIClient(BaseLM):
             extra_body["usage"] = {"include": True}
 
         response = await self.async_client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model, messages=messages, extra_body=extra_body,
+            **_normalize_sampling_args(self.sampling_args),
         )
         self._track_cost(response, model)
         return response.choices[0].message.content
