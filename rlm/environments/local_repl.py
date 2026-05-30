@@ -162,6 +162,8 @@ class LocalREPL(NonIsolatedEnv):
         custom_sub_tools: dict[str, Any] | None = None,
         compaction: bool = False,
         max_concurrent_subcalls: int = 4,
+        cwd: str | None = None,
+        env_vars: dict[str, str] | None = None,
         **kwargs,
     ):
         super().__init__(
@@ -174,7 +176,24 @@ class LocalREPL(NonIsolatedEnv):
         self.lm_handler_address = lm_handler_address
         self.subcall_fn = subcall_fn  # Callback for recursive RLM calls (depth > 1 support)
         self.original_cwd = os.getcwd()
-        self.temp_dir = tempfile.mkdtemp(prefix=f"repl_env_{uuid.uuid4()}_")
+
+        if cwd is not None:
+            self.temp_dir = os.path.abspath(cwd)
+
+            if not os.path.isdir(self.temp_dir):
+                raise FileNotFoundError(
+                    f"LocalREPL cwd does not exist: {self.temp_dir}. "
+                    "Make sure this path exists in the same filesystem where LocalREPL is running."
+                )
+
+            self._owns_temp_dir = False
+        else:
+            self.temp_dir = tempfile.mkdtemp(prefix=f"repl_env_{uuid.uuid4()}_")
+            self._owns_temp_dir = True
+
+        self.env_vars = {k: str(v) for k, v in (env_vars or {}).items()}
+        os.environ.update(self.env_vars)
+
         self._lock = threading.Lock()
         self._context_count: int = 0
         self._history_count: int = 0
@@ -592,9 +611,11 @@ class LocalREPL(NonIsolatedEnv):
     def cleanup(self):
         """Clean up temp directory and reset state."""
         try:
-            shutil.rmtree(self.temp_dir)
+            if getattr(self, "_owns_temp_dir", True):
+                shutil.rmtree(self.temp_dir)
         except Exception:
             pass
+
         if hasattr(self, "globals"):
             self.globals.clear()
         if hasattr(self, "locals"):

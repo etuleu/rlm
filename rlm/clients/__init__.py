@@ -2,6 +2,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+import os
+
 from rlm.clients.base_lm import BaseLM
 from rlm.core.types import ClientBackend
 
@@ -19,6 +21,11 @@ def get_client(
     if backend == "openai":
         from rlm.clients.openai import OpenAIClient
 
+        return OpenAIClient(**backend_kwargs)
+    if backend == "deepinfra":
+        from rlm.clients.openai import OpenAIClient
+        backend_kwargs.setdefault("base_url", "https://api.deepinfra.com/v1/openai")
+        backend_kwargs.setdefault("api_key", os.environ["DEEPINFRA_TOKEN"])
         return OpenAIClient(**backend_kwargs)
     elif backend == "vllm":
         from rlm.clients.openai import OpenAIClient
@@ -43,7 +50,7 @@ def get_client(
         return OpenAIClient(**backend_kwargs)
     elif backend == "anthropic":
         from rlm.clients.anthropic import AnthropicClient
-
+        backend_kwargs.setdefault("api_key", os.environ.get("ANTHROPIC_API_KEY"))
         return AnthropicClient(**backend_kwargs)
     elif backend == "gemini":
         from rlm.clients.gemini import GeminiClient
