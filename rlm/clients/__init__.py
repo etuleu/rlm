@@ -22,10 +22,15 @@ def get_client(
         from rlm.clients.openai import OpenAIClient
 
         return OpenAIClient(**backend_kwargs)
-    if backend == "deepinfra":
+    elif backend == "deepinfra":
         from rlm.clients.openai import OpenAIClient
         backend_kwargs.setdefault("base_url", "https://api.deepinfra.com/v1/openai")
         backend_kwargs.setdefault("api_key", os.environ["DEEPINFRA_TOKEN"])
+        return OpenAIClient(**backend_kwargs)
+    elif backend == "xai":
+        from rlm.clients.openai import OpenAIClient
+        backend_kwargs.setdefault("base_url", "https://api.x.ai/v1")
+        backend_kwargs.setdefault("api_key", os.environ["XAI_API_KEY"])
         return OpenAIClient(**backend_kwargs)
     elif backend == "vllm":
         from rlm.clients.openai import OpenAIClient
