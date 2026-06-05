@@ -61,7 +61,7 @@ for i, section in enumerate(context):
         print(f"After section {{i}} of {{len(context)}}, you have tracked: {{buffer}}")
 ```
 
-As another example, when the context isn't that long (e.g. >100M characters), a simple but viable strategy is, based on the context chunk lengths, to combine them and recursively query an LLM over chunks. For example, if the context is a List[str], we ask the same query over each chunk using `llm_query_batched` for concurrent processing:
+As another example, when the context isn't that long (e.g. not >1M characters), a simple but viable strategy is, based on the context chunk lengths, to combine them and recursively query an LLM over chunks. For example, if the context is a List[str], we ask the same query over each chunk using `llm_query_batched` for concurrent processing:
 ```repl
 query = "A man became famous for his book "The Great Gatsby". How many jobs did he have?"
 # Suppose our context is ~1M chars, and we want each sub-LLM query to be ~0.1M chars so we split it into 10 chunks
